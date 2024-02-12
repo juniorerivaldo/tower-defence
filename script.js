@@ -8,7 +8,12 @@ const cellSize = 100;
 const cellGap = 3;
 const gameGrid = [];
 const defenders = [];
-let numberOfResources = 300; /* initial number to spawn defenders */ 
+const enemies = [];
+const enemiesPositions = [];
+const gameOver = false;
+let numberOfResources = 300; /* initial number to spawn defenders */
+let enemiesInterval = 600;
+let frame = 0;
 
 // mouse
 const mouse = {
@@ -33,15 +38,15 @@ canvas.addEventListener("click", function () {
 	const gridPositionX = mouse.x - (mouse.x % cellSize);
 	const gridPositionY = mouse.y - (mouse.y % cellSize);
 	if (gridPositionY < cellSize) return; /* Do not allow click to put defenders on first row */
-    for(let i = 0; i < defenders.length; i ++){
-        if(defenders[i].x === gridPositionX && defenders[i].y === gridPositionY){
-            return; /*  not spawn defender on top of other defender */
-        }
-    }
-    if(numberOfResources >= defenderCost){
-        defenders.push(new Defender(gridPositionX, gridPositionY));
-        numberOfResources -= defenderCost;
-    }
+	for (let i = 0; i < defenders.length; i++) {
+		if (defenders[i].x === gridPositionX && defenders[i].y === gridPositionY) {
+			return; /*  not spawn defender on top of other defender */
+		}
+	}
+	if (numberOfResources >= defenderCost) {
+		defenders.push(new Defender(gridPositionX, gridPositionY));
+		numberOfResources -= defenderCost;
+	}
 });
 
 /* game board */
@@ -82,10 +87,37 @@ function handleGameGrid() {
 	}
 }
 
-function handleDefenders(){
-    for(let i = 0; i <defenders.length; i ++){
-        defenders[i].draw();
-    }
+function handleDefenders() {
+	for (let i = 0; i < defenders.length; i++) {
+		defenders[i].draw();
+		for(let j = 0; j < enemies.length; j++){
+			if(defenders[i] && collision(defenders[i], enemies[j])){
+				enemies[j].movement = 0;
+				defenders[i].health -= 0.2;
+			}
+			if(defenders[i] && defenders[i].health <= 0){
+				defenders.splice(i,1);
+				i--;
+				enemies[j].movement = enemies[j].speed;
+			}
+		}
+	}
+}
+
+function handleEnemies() {
+	for (let i = 0; i < enemies.length; i++) {
+		enemies[i].update();
+		enemies[i].draw();
+		if (enemies[i].x < 0) {
+			gameOver = true; /* case any enemy cross the border game is over */
+		}
+	}
+	if (frame % enemiesInterval === 0) {
+		let verticalPosition = Math.floor(Math.random() * 5 + 1) * cellSize;
+		enemies.push(new Enemy(verticalPosition));
+		enemiesPositions.push(verticalPosition);
+		if (enemiesInterval > 120) enemiesInterval -= 100;
+	}
 }
 
 /* projectiles */
@@ -104,7 +136,7 @@ class Defender {
 	}
 	draw() {
 		ctx.fillStyle = "blue";
-		ctx.fillRect(this.x, this.y, this.width, this.health);
+		ctx.fillRect(this.x, this.y, this.width, this.height);
 		ctx.fillStyle = "gold";
 		ctx.font = "30px Arial";
 		ctx.fillText(Math.floor(this.health), this.x + 25, this.y + 30);
@@ -112,25 +144,54 @@ class Defender {
 }
 
 /* enemies */
+class Enemy {
+	constructor(verticalPosition) {
+		this.x = canvas.width;
+		this.y = verticalPosition;
+		this.width = cellSize;
+		this.height = cellSize;
+		this.speed = Math.random() * 0.2 + 0.4;
+		this.movement = this.speed;
+		this.health = 200;
+		this.maxHealth = this.health;
+		this.verticalPosition = verticalPosition; /* validar depois se da para usar isso dentro da classe ao inves de criar um novo array só para dar push no position de cada enemi */
+	}
+	update() {
+		this.x -= this.movement;
+	}
+	draw() {
+		ctx.fillStyle = "red";
+		ctx.fillRect(this.x, this.y, this.width, this.height);
+		ctx.fillStyle = "gold";
+		ctx.font = "30px Arial";
+		ctx.fillText(Math.floor(this.health), this.x + 25, this.y + 30);
+	}
+}
 
 /* resources */
 
 /* utilities */
-function handleGameStatus(){
-    ctx.fillStyle = 'gold';
-    ctx.font = '30px Arial'
-    ctx.fillText('Resources: ' + numberOfResources, 20, 55 );
+function handleGameStatus() {
+	ctx.fillStyle = "gold";
+	ctx.font = "30px Arial";
+	ctx.fillText("Resources: " + numberOfResources, 20, 55);
+	if (gameOver) {
+		ctx.fillStyle = "black";
+		ctx.font = "90px Arial";
+		ctx.fillText("GAME OVER", 135, 330);
+	}
 }
-
 
 function animate() {
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 	ctx.fillStyle = "blue";
 	ctx.fillRect(0, 0, controlsBar.width, controlsBar.height);
 	handleGameGrid();
-    handleDefenders();
-    handleGameStatus();
-	requestAnimationFrame(animate); /* Recusive loop */
+	handleDefenders();
+	handleEnemies();
+	handleGameStatus();
+	frame++;
+	if (!gameOver) requestAnimationFrame(animate); /* Recusive loop */
 }
 
 function collision(first, second) {
