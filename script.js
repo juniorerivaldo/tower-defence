@@ -10,10 +10,12 @@ const gameGrid = [];
 const defenders = [];
 const enemies = [];
 const enemiesPositions = [];
+const projectiles = [];
 const gameOver = false;
 let numberOfResources = 300; /* initial number to spawn defenders */
 let enemiesInterval = 600;
 let frame = 0;
+let score = 0;
 
 // mouse
 const mouse = {
@@ -90,13 +92,14 @@ function handleGameGrid() {
 function handleDefenders() {
 	for (let i = 0; i < defenders.length; i++) {
 		defenders[i].draw();
-		for(let j = 0; j < enemies.length; j++){
-			if(defenders[i] && collision(defenders[i], enemies[j])){
+		defenders[i].update();
+		for (let j = 0; j < enemies.length; j++) {
+			if (defenders[i] && collision(defenders[i], enemies[j])) {
 				enemies[j].movement = 0;
 				defenders[i].health -= 0.2;
 			}
-			if(defenders[i] && defenders[i].health <= 0){
-				defenders.splice(i,1);
+			if (defenders[i] && defenders[i].health <= 0) {
+				defenders.splice(i, 1);
 				i--;
 				enemies[j].movement = enemies[j].speed;
 			}
@@ -111,6 +114,13 @@ function handleEnemies() {
 		if (enemies[i].x < 0) {
 			gameOver = true; /* case any enemy cross the border game is over */
 		}
+		if(enemies[i].health <= 0){
+			let gainedResources = enemies[i].maxHealth / 10;
+			numberOfResources += gainedResources;
+			score += gainedResources;
+			enemies.splice(i,1);
+			i--;
+		}
 	}
 	if (frame % enemiesInterval === 0) {
 		let verticalPosition = Math.floor(Math.random() * 5 + 1) * cellSize;
@@ -120,7 +130,44 @@ function handleEnemies() {
 	}
 }
 
+function handleProjectiles() {
+	for (let i = 0; i < projectiles.length; i++) {
+		projectiles[i].update();
+		projectiles[i].draw();
+		for(let j =0; j < enemies.length; j++){
+			if(projectiles[i] && enemies[j] && collision(projectiles[i],enemies[j])){
+				enemies[j].health -= projectiles[i].power;
+				projectiles.splice(i,1);
+				i--;
+			}
+		}
+		if (projectiles[i] && projectiles[i].x > canvas.width - cellSize) {
+			projectiles.splice(i, 1);
+			i--;
+		}
+	}
+}
+
 /* projectiles */
+class Projectile {
+	constructor(x, y) {
+		this.x = x;
+		this.y = y;
+		this.width = 10;
+		this.height = 10;
+		this.power = 20;
+		this.speed = 5;
+	}
+	update() {
+		this.x += this.speed;
+	}
+	draw() {
+		ctx.fillStyle = "black";
+		ctx.beginPath();
+		ctx.arc(this.x, this.y, this.width, 0, Math.PI * 2);
+		ctx.fill();
+	}
+}
 
 /* defenders */
 class Defender {
@@ -141,6 +188,12 @@ class Defender {
 		ctx.font = "30px Arial";
 		ctx.fillText(Math.floor(this.health), this.x + 25, this.y + 30);
 	}
+	update() {
+		this.timer++;
+		if (this.timer % 100 === 0) {
+			projectiles.push(new Projectile(this.x + 70, this.y + 50));
+		}
+	}
 }
 
 /* enemies */
@@ -152,7 +205,7 @@ class Enemy {
 		this.height = cellSize;
 		this.speed = Math.random() * 0.2 + 0.4;
 		this.movement = this.speed;
-		this.health = 200;
+		this.health = 100;
 		this.maxHealth = this.health;
 		this.verticalPosition = verticalPosition; /* validar depois se da para usar isso dentro da classe ao inves de criar um novo array só para dar push no position de cada enemi */
 	}
@@ -174,7 +227,8 @@ class Enemy {
 function handleGameStatus() {
 	ctx.fillStyle = "gold";
 	ctx.font = "30px Arial";
-	ctx.fillText("Resources: " + numberOfResources, 20, 55);
+	ctx.fillText("Score: " + score, 20, 40);
+	ctx.fillText("Resources: " + numberOfResources, 20, 80);
 	if (gameOver) {
 		ctx.fillStyle = "black";
 		ctx.font = "90px Arial";
@@ -188,6 +242,7 @@ function animate() {
 	ctx.fillRect(0, 0, controlsBar.width, controlsBar.height);
 	handleGameGrid();
 	handleDefenders();
+	handleProjectiles();
 	handleEnemies();
 	handleGameStatus();
 	frame++;
