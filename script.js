@@ -11,9 +11,12 @@ const defenders = [];
 const enemies = [];
 const enemiesPositions = [];
 const projectiles = [];
-const gameOver = false;
+const resources = [];
+let gameOver = false;
+let winning = false;
 let numberOfResources = 300; /* initial number to spawn defenders */
 let enemiesInterval = 600;
+let winningScore = 30;
 let frame = 0;
 let score = 0;
 
@@ -93,10 +96,18 @@ function handleDefenders() {
 	for (let i = 0; i < defenders.length; i++) {
 		defenders[i].draw();
 		defenders[i].update();
+		if (enemiesPositions.indexOf(defenders[i].y) !== -1) {
+			/* verify if any enemy on enemiesPositions has same y of defender */
+			defenders[i].shooting = true;
+		} else {
+			defenders[i].shooting = false;
+		}
 		for (let j = 0; j < enemies.length; j++) {
 			if (defenders[i] && collision(defenders[i], enemies[j])) {
-				enemies[j].movement = 0;
-				defenders[i].health -= 0.2;
+				if (defenders[i].y === enemies[j].y) {
+					enemies[j].movement = 0;
+					defenders[i].health -= 0.2;
+				}
 			}
 			if (defenders[i] && defenders[i].health <= 0) {
 				defenders.splice(i, 1);
@@ -111,22 +122,24 @@ function handleEnemies() {
 	for (let i = 0; i < enemies.length; i++) {
 		enemies[i].update();
 		enemies[i].draw();
-		if (enemies[i].x < 0) {
+		if (enemies[i].x <= 0) {
 			gameOver = true; /* case any enemy cross the border game is over */
 		}
-		if(enemies[i].health <= 0){
+		if (enemies[i].health <= 0) {
 			let gainedResources = enemies[i].maxHealth / 10;
 			numberOfResources += gainedResources;
 			score += gainedResources;
-			enemies.splice(i,1);
+			const findIndex = enemiesPositions.indexOf(enemies[i].y); /* look for this enemy y position to remove from enemies Positions array */
+			enemiesPositions.splice(findIndex, 1);
+			enemies.splice(i, 1);
 			i--;
 		}
 	}
-	if (frame % enemiesInterval === 0) {
+	if (frame % enemiesInterval === 0 && score < winningScore) {
 		let verticalPosition = Math.floor(Math.random() * 5 + 1) * cellSize;
 		enemies.push(new Enemy(verticalPosition));
 		enemiesPositions.push(verticalPosition);
-		if (enemiesInterval > 120) enemiesInterval -= 100;
+		if (enemiesInterval > 120) enemiesInterval -= 40;
 	}
 }
 
@@ -134,16 +147,30 @@ function handleProjectiles() {
 	for (let i = 0; i < projectiles.length; i++) {
 		projectiles[i].update();
 		projectiles[i].draw();
-		for(let j =0; j < enemies.length; j++){
-			if(projectiles[i] && enemies[j] && collision(projectiles[i],enemies[j])){
+		for (let j = 0; j < enemies.length; j++) {
+			if (projectiles[i] && enemies[j] && collision(projectiles[i], enemies[j])) {
 				enemies[j].health -= projectiles[i].power;
-				projectiles.splice(i,1);
+				projectiles.splice(i, 1);
 				i--;
 			}
 		}
 		if (projectiles[i] && projectiles[i].x > canvas.width - cellSize) {
 			projectiles.splice(i, 1);
 			i--;
+		}
+	}
+}
+
+function handleResources() {
+	if (frame % 500 === 0 && score < winningScore) {
+		resources.push(new Resource());
+	}
+	for (let i = 0; i < resources.length; i++) {
+		resources[i].draw();
+		if (resources[i] && mouse.x && mouse.y && collision(resources[i], mouse)) {
+			numberOfResources += resources[i].amount;
+			resources.splice(i, 1);
+			i++;
 		}
 	}
 }
@@ -189,9 +216,13 @@ class Defender {
 		ctx.fillText(Math.floor(this.health), this.x + 25, this.y + 30);
 	}
 	update() {
-		this.timer++;
-		if (this.timer % 100 === 0) {
-			projectiles.push(new Projectile(this.x + 70, this.y + 50));
+		if (this.shooting) {
+			this.timer++;
+			if (this.timer % 100 === 0) {
+				projectiles.push(new Projectile(this.x + 70, this.y + 50));
+			}
+		} else {
+			this.timer = 0;
 		}
 	}
 }
@@ -222,6 +253,23 @@ class Enemy {
 }
 
 /* resources */
+const amounts = [30, 20, 40];
+class Resource {
+	constructor() {
+		this.x = Math.random() * (canvas.width - cellSize);
+		this.y = Math.floor(Math.random() * 5) + 1 * cellSize + 25;
+		this.width = cellSize * 0.6;
+		this.height = cellSize * 0.6;
+		this.amount = amounts[Math.floor(Math.random() * amounts.length)];
+	}
+	draw() {
+		ctx.fillStyle = "yellow";
+		ctx.fillRect(this.x, this.y, this.width, this.height);
+		ctx.fillStyle = "black";
+		ctx.font = "20px Arial";
+		ctx.fillText(this.amount, this.x + 15, this.y + 25);
+	}
+}
 
 /* utilities */
 function handleGameStatus() {
@@ -230,9 +278,14 @@ function handleGameStatus() {
 	ctx.fillText("Score: " + score, 20, 40);
 	ctx.fillText("Resources: " + numberOfResources, 20, 80);
 	if (gameOver) {
-		ctx.fillStyle = "black";
+		ctx.fillStyle = "red";
 		ctx.font = "90px Arial";
 		ctx.fillText("GAME OVER", 135, 330);
+	}
+	if(score >= winningScore && enemies.length === 0){
+		ctx.fillStyle = 'black';
+		ctx.font = '90 Arial';
+		ctx.fillText('WINNING WITH SCORE' + score, 135,330);
 	}
 }
 
@@ -242,6 +295,7 @@ function animate() {
 	ctx.fillRect(0, 0, controlsBar.width, controlsBar.height);
 	handleGameGrid();
 	handleDefenders();
+	handleResources();
 	handleProjectiles();
 	handleEnemies();
 	handleGameStatus();
@@ -257,3 +311,8 @@ function collision(first, second) {
 
 createGrid(); /* start grid here */
 animate(); // start game
+
+
+window.addEventListener('resize',function(){
+	canvasPosition = canvas.getBoundingClientRect(); /* this function recalculate canvas bound if screen is resize, for mouse coords */
+})
